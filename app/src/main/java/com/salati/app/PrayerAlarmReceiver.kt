@@ -33,23 +33,27 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
     }
 
     private fun createChannels(context: Context) {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val reminder = NotificationChannel(REMINDER_CHANNEL, "التذكير قبل الصلاة", NotificationManager.IMPORTANCE_HIGH)
-            val adhan = NotificationChannel(ADHAN_CHANNEL, "الأذان عند دخول وقت الصلاة", NotificationManager.IMPORTANCE_HIGH).apply {
-                val sound = android.net.Uri.parse("android.resource://${context.packageName}/${R.raw.adhan}")
-                val attributes = android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-                setSound(sound, attributes)
-                description = "تشغيل صوت الأذان الذي أضافه المستخدم عند دخول وقت الصلاة"
-            }
-            manager.createNotificationChannel(reminder)
-            manager.createNotificationChannel(adhan)
-        }
-    }
+    if (Build.VERSION.SDK_INT >= 26) {
+        val manager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
 
+        val reminder = NotificationChannel(
+            REMINDER_CHANNEL,
+            "التذكير قبل الصلاة",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+
+        val adhan = NotificationChannel(
+            ADHAN_CHANNEL,
+            "التذكير عند دخول وقت الصلاة",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+
+        manager.createNotificationChannel(reminder)
+        manager.createNotificationChannel(adhan)
+    }
+}
     companion object {
         const val REMINDER_CHANNEL = "salati_reminders_v1"
         const val ADHAN_CHANNEL = "salati_adhan_audio_v1"
