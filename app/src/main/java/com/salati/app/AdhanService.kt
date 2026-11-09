@@ -43,25 +43,39 @@ class AdhanService : Service() {
         startForeground(NOTIFICATION_ID, notification)
 
         if (player == null) {
-            player = MediaPlayer.create(this, R.raw.adhan)
+            try {
+                player = MediaPlayer.create(this, R.raw.adhan)
 
-            if (player == null) {
+                if (player == null) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+
+                player?.setOnCompletionListener {
+                    stopSelf()
+                }
+
+                player?.setOnErrorListener { _, _, _ ->
+                    stopSelf()
+                    true
+                }
+
+                player?.start()
+
+            } catch (_: Exception) {
+                player?.release()
+                player = null
                 stopSelf()
                 return START_NOT_STICKY
             }
-
-            player?.setOnCompletionListener {
-                stopSelf()
-            }
-
-            player?.start()
         }
 
         return START_NOT_STICKY
     }
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "تشغيل الأذان",
@@ -79,9 +93,11 @@ class AdhanService : Service() {
     override fun onDestroy() {
         player?.release()
         player = null
+
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
 }
-
