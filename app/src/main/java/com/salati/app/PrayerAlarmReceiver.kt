@@ -1,13 +1,16 @@
 
 package com.salati.app
 
-import android.app.*
-import android.content.BroadcastReceiver
+import android.app.AlarmManager
+import android.app.BroadcastReceiver
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.media.MediaPlayer
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 
 class PrayerAlarmReceiver : BroadcastReceiver() {
 
@@ -33,27 +36,33 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 ADHAN_CHANNEL
             )
 
-            // تشغيل الأذان إذا كان مفعلاً
             val prefs = context.getSharedPreferences(
                 "salati",
                 Context.MODE_PRIVATE
             )
 
             if (prefs.getBoolean("adhan_enabled", true)) {
-    val serviceIntent = Intent(context, AdhanService::class.java)
+                val serviceIntent = Intent(
+                    context,
+                    AdhanService::class.java
+                )
 
-    try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
-    } catch (_: Exception) {
-        // يظل إشعار الصلاة يعمل حتى لو تعذر تشغيل الصوت
-    }
-}
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        ContextCompat.startForegroundService(
+                            context,
+                            serviceIntent
+                        )
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                } catch (_: Exception) {
+                    // يظل إشعار الصلاة يعمل إذا تعذر تشغيل الصوت
+                }
+            }
 
-        } else {
+        } else if (type == "reminder") {
+
             val verse = verses[
                 (System.currentTimeMillis() / 86400000L % verses.size).toInt()
             ]
@@ -77,7 +86,9 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(text)
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
@@ -90,30 +101,30 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
     }
 
     private fun createChannels(context: Context) {
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(
                 Context.NOTIFICATION_SERVICE
             ) as NotificationManager
 
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    REMINDER_CHANNEL,
-                    "التذكير قبل الصلاة",
-                    NotificationManager.IMPORTANCE_HIGH
-                )
+            val reminderChannel = NotificationChannel(
+                REMINDER_CHANNEL,
+                "التذكير قبل الصلاة",
+                NotificationManager.IMPORTANCE_HIGH
             )
 
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    ADHAN_CHANNEL,
-                    "التنبيه عند دخول وقت الصلاة",
-                    NotificationManager.IMPORTANCE_HIGH
-                )
+            val adhanChannel = NotificationChannel(
+                ADHAN_CHANNEL,
+                "التنبيه عند دخول وقت الصلاة",
+                NotificationManager.IMPORTANCE_HIGH
             )
+
+            manager.createNotificationChannel(reminderChannel)
+            manager.createNotificationChannel(adhanChannel)
         }
     }
 
     companion object {
+
         const val REMINDER_CHANNEL = "salati_reminders_v1"
         const val ADHAN_CHANNEL = "salati_adhan_audio_v1"
 
@@ -177,39 +188,3 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         }
     }
 }
-
-object AdhanPlayer {
-
-    private var player: MediaPlayer? = null
-
-    @Synchronized
-    fun start(context: Context) {
-        stop()
-
-        try {
-            player = MediaPlayer.create(
-                context.applicationContext,
-                R.raw.adhan
-            )?.apply {
-                setOnCompletionListener {
-                    stop()
-                }
-                start()
-            }
-        } catch (_: Exception) {
-            stop()
-        }
-    }
-
-    @Synchronized
-    fun stop() {
-        try {
-            player?.stop()
-        } catch (_: Exception) {
-        }
-
-        player?.release()
-        player = null
-    }
-}
-
