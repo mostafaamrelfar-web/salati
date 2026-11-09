@@ -2,18 +2,17 @@
 package com.salati.app
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
+import android.content.Intent
 import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -22,418 +21,336 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
+    private val navy = Color.rgb(15, 25, 48)
+    private val gold = Color.rgb(218, 181, 105)
+    private val white = Color.WHITE
+    private val muted = Color.rgb(190, 195, 205)
+
     private val executor = Executors.newSingleThreadExecutor()
+
     private val prefs by lazy {
         getSharedPreferences("salati", Context.MODE_PRIVATE)
     }
 
-    private lateinit var content: LinearLayout
     private var statusView: TextView? = null
     private var timesView: TextView? = null
+    private var nextPrayerView: TextView? = null
+    private var adhanSwitch: Switch? = null
+    private var streakView: TextView? = null
 
-    private val navy = Color.rgb(16, 43, 53)
-    private val gold = Color.rgb(229, 199, 122)
-    private val white = Color.WHITE
-    private val muted = Color.rgb(220, 231, 232)
+    private val prayerNames = listOf(
+        "Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"
+    )
+
+    private val arabicNames = listOf(
+        "الفجر", "الظهر", "العصر", "المغرب", "العشاء"
+    )
+
+    private val verses = listOf(
+        "﴿ وَأَقِمِ الصَّلَاةَ لِذِكْرِي ﴾\nسورة طه - الآية 14",
+        "﴿ إِنَّ الصَّلَاةَ تَنْهَىٰ عَنِ الْفَحْشَاءِ وَالْمُنكَرِ ﴾\nسورة العنكبوت - الآية 45",
+        "﴿ وَاسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ ﴾\nسورة البقرة - الآية 45",
+        "﴿ حَافِظُوا عَلَى الصَّلَوَاتِ ﴾\nسورة البقرة - الآية 238",
+        "﴿ إِنَّنِي أَنَا اللَّهُ لَا إِلَٰهَ إِلَّا أَنَا فَاعْبُدْنِي وَأَقِمِ الصَّلَاةَ لِذِكْرِي ﴾\nسورة طه - الآية 14"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        buildUi()
+        showHome()
         requestNeededPermissions()
     }
 
-    private fun buildUi() {
+    private fun showHome() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(navy)
+            setPadding(22, 24, 22, 20)
         }
 
-        content = LinearLayout(this).apply {
+        val scroll = ScrollView(this)
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 24, 20, 24)
         }
 
-        val scroll = ScrollView(this).apply {
-            addView(content)
-        }
-
-        root.addView(
-            scroll,
-            LinearLayout.LayoutParams(
-                -1, 0, 1f
-            )
+        val title = makeText(
+            "صَلَاتِي",
+            30f,
+            gold,
+            true
         )
+        title.gravity = Gravity.CENTER
+        content.addView(title)
 
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(4, 8, 4, 8)
-            setBackgroundColor(Color.rgb(11, 32, 40))
-        }
-
-        addNavButton(nav, "الرئيسية") { showHome() }
-        addNavButton(nav, "المواقيت") { showPrayerTimes() }
-        addNavButton(nav, "القرآن") { showQuran() }
-        addNavButton(nav, "إنجازاتي") { showStreak() }
-
-        root.addView(nav)
-        setContentView(root)
-
-        showHome()
-    }
-
-    private fun addNavButton(
-        parent: LinearLayout,
-        title: String,
-        action: () -> Unit
-    ) {
-        val button = TextView(this).apply {
-            text = title
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(gold)
-            setPadding(5, 14, 5, 14)
-            setOnClickListener { action() }
-        }
-
-        parent.addView(
-            button,
-            LinearLayout.LayoutParams(0, -2, 1f)
+        val subtitle = makeText(
+            "رفيقك إلى الصلاة",
+            15f,
+            muted
         )
-    }
+        subtitle.gravity = Gravity.CENTER
+        content.addView(subtitle)
 
-    private fun clearContent() {
-        content.removeAllViews()
-        statusView = null
-        timesView = null
-    }
+        addSpace(content, 24)
 
-    private fun addText(
-        text: String,
-        size: Float,
-        color: Int = white,
-        bold: Boolean = false
-    ): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = size
-            setTextColor(color)
-            gravity = Gravity.CENTER
-            setPadding(8, 12, 8, 12)
-            if (bold) setTypeface(null, Typeface.BOLD)
-        }
-    }
+        addSectionTitle(content, "الصلاة القادمة")
 
-    private fun addCard(): LinearLayout {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(16, 16, 16, 16)
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(25, 58, 68))
-                cornerRadius = 24f
-            }
-        }
-
-        val params = LinearLayout.LayoutParams(-1, -2)
-        params.setMargins(0, 10, 0, 10)
-        content.addView(card, params)
-        return card
-    }
-
-    private fun addButton(
-        parent: LinearLayout,
-        title: String,
-        action: () -> Unit
-    ) {
-        val button = Button(this).apply {
-            text = title
-            setOnClickListener { action() }
-        }
-        parent.addView(
-            button,
-            LinearLayout.LayoutParams(-1, -2)
+        nextPrayerView = makeText(
+            "جارٍ حساب الصلاة القادمة...",
+            21f,
+            gold,
+            true
         )
-    }
+        nextPrayerView?.gravity = Gravity.CENTER
+        content.addView(nextPrayerView)
 
-    // الرئيسية
+        addSpace(content, 15)
 
-    private fun showHome() {
-        clearContent()
+        addSectionTitle(content, "مواقيت الصلاة")
 
-        content.addView(
-            addText("صَلَاتِي", 32f, gold, true)
+        timesView = makeText(
+            prefs.getString("times", "لم يتم تحميل المواقيت بعد") ?: "",
+            18f,
+            white
         )
+        timesView?.gravity = Gravity.CENTER
+        content.addView(timesView)
 
-        content.addView(
-            addText("وقتك مع الله أولى", 16f, muted)
-        )
+        addSpace(content, 10)
 
-        val today = SimpleDateFormat(
-            "EEEE، d MMMM",
-            Locale("ar")
-        ).format(Date())
-
-        val dateCard = addCard()
-        dateCard.addView(addText(today, 17f, gold, true))
-        dateCard.addView(
-            addText("مرحباً بك في صلاتي", 20f, white, true)
-        )
-        dateCard.addView(
-            addText(
-                "اجعل صلاتك أولويتك واجعل يومك عامراً بالذكر",
-                14f,
-                muted
-            )
-        )
-
-        val prayerCard = addCard()
-        prayerCard.addView(
-            addText("مواقيت الصلاة", 19f, gold, true)
-        )
-
-        val saved = prefs.getString("times", null)
-        prayerCard.addView(
-            addText(
-                saved ?: "حدّد موقعك لمعرفة مواقيت الصلاة",
-                16f
-            )
-        )
-
-        addButton(prayerCard, "تحديث مواقيت الصلاة") {
-            loadPrayerTimes()
-        }
-
-        addButton(prayerCard, "عرض جميع المواقيت") {
-            showPrayerTimes()
-        }
-
-        val verseCard = addCard()
-        verseCard.addView(
-            addText("آية اليوم", 20f, gold, true)
-        )
-        verseCard.addView(
-            addText(getDailyVerse(), 21f, white)
-        )
-
-        val streakCard = addCard()
-        streakCard.addView(
-            addText("إنجازك اليومي", 19f, gold, true)
-        )
-        streakCard.addView(
-            addText(
-                "🔥 ${prefs.getInt("streak_count", 0)} يوم متتالي",
-                23f,
-                white,
-                true
-            )
-        )
-        addButton(streakCard, "عرض إنجازاتي") {
-            showStreak()
-        }
-
-        val appsCard = addCard()
-        appsCard.addView(
-            addText("وضع الصلاة", 19f, gold, true)
-        )
-        appsCard.addView(
-            addText(
-                "اختر التطبيقات التي تريد تقييدها أثناء الصلاة",
-                14f,
-                muted
-            )
-        )
-
-        addAppCheck(
-            appsCard,
-            "YouTube",
-            "com.google.android.youtube"
-        )
-        addAppCheck(
-            appsCard,
-            "TikTok",
-            "com.zhiliaoapp.musically"
-        )
-        addAppCheck(
-            appsCard,
-            "Instagram",
-            "com.instagram.android"
-        )
-        addAppCheck(
-            appsCard,
-            "Facebook",
-            "com.facebook.katana"
-        )
-
-        addButton(appsCard, "تفعيل صلاحية حظر التطبيقات") {
-            startActivity(
-                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            )
-        }
-
-        content.addView(
-            addText(
-                "اللهم اجعل الصلاة راحةً لقلوبنا",
-                15f,
-                gold
-            )
-        )
-    }
-
-    // صفحة المواقيت
-
-    private fun showPrayerTimes() {
-        clearContent()
-
-        content.addView(
-            addText("مواقيت الصلاة", 27f, gold, true)
-        )
-
-        val card = addCard()
-
-        timesView = addText(
-            prefs.getString("times", null)
-                ?: "لم يتم تحديد المواقيت بعد",
-            21f
-        )
-
-        card.addView(timesView)
-
-        statusView = addText(
-            prefs.getString("date", null)?.let {
-                "آخر تحديث: $it"
-            } ?: "حدّد موقعك لتحديث المواقيت",
+        statusView = makeText(
+            "جاهز",
             14f,
             muted
         )
+        statusView?.gravity = Gravity.CENTER
+        content.addView(statusView)
 
-        card.addView(statusView)
-
-        addButton(card, "تحديد موقعي وتحديث المواقيت") {
+        val refreshButton = makeButton("تحديث مواقيت الصلاة")
+        refreshButton.setOnClickListener {
             loadPrayerTimes()
         }
+        content.addView(refreshButton)
 
-        content.addView(
-            addText(
-                "التذكير قبل الصلاة بخمس دقائق",
-                15f,
-                gold
+        addSpace(content, 20)
+
+        addSectionTitle(content, "الأذان")
+
+        adhanSwitch = Switch(this).apply {
+            text = "تشغيل الأذان عند دخول وقت الصلاة"
+            setTextColor(white)
+            textSize = 16f
+            isChecked = prefs.getBoolean("adhan_enabled", true)
+
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit()
+                    .putBoolean("adhan_enabled", checked)
+                    .apply()
+
+                if (!checked) {
+                    stopService(
+                        Intent(this@MainActivity, AdhanService::class.java)
+                    )
+                }
+            }
+        }
+        content.addView(adhanSwitch)
+
+        val testAdhanButton = makeButton("تجربة تشغيل الأذان")
+        testAdhanButton.setOnClickListener {
+            if (prefs.getBoolean("adhan_enabled", true)) {
+                startAdhanService()
+            } else {
+                Toast.makeText(
+                    this,
+                    "فعّل الأذان أولاً",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        content.addView(testAdhanButton)
+
+        val stopAdhanButton = makeButton("إيقاف الأذان")
+        stopAdhanButton.setOnClickListener {
+            stopService(Intent(this, AdhanService::class.java))
+        }
+        content.addView(stopAdhanButton)
+
+        addSpace(content, 20)
+
+        addSectionTitle(content, "آية اليوم")
+
+        val verseIndex = (
+            Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % verses.size
+        )
+
+        val verseView = makeText(
+            verses[verseIndex],
+            17f,
+            gold
+        )
+        verseView.gravity = Gravity.CENTER
+        content.addView(verseView)
+
+        addSpace(content, 20)
+
+        addSectionTitle(content, "إنجازاتي")
+
+        val streak = prefs.getInt("streak_count", 0)
+
+        streakView = makeText(
+            "سلسلة إنجازك الحالية: $streak يوم",
+            17f,
+            white
+        )
+        streakView?.gravity = Gravity.CENTER
+        content.addView(streakView)
+
+        val checkinButton = makeButton("تسجيل إنجاز اليوم")
+        checkinButton.setOnClickListener {
+            recordCheckin()
+        }
+        content.addView(checkinButton)
+
+        addSpace(content, 20)
+
+        addSectionTitle(content, "التطبيقات المحظورة وقت الصلاة")
+
+        addAppCheck(content, "YouTube", "com.google.android.youtube")
+        addAppCheck(content, "TikTok", "com.zhiliaoapp.musically")
+        addAppCheck(content, "Instagram", "com.instagram.android")
+        addAppCheck(content, "Facebook", "com.facebook.katana")
+
+        addSpace(content, 20)
+
+        val accessibilityButton = makeButton(
+            "إعدادات صلاحية حظر التطبيقات"
+        )
+        accessibilityButton.setOnClickListener {
+            startActivity(
+                Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            )
+        }
+        content.addView(accessibilityButton)
+
+        addSpace(content, 25)
+
+        val footer = makeText(
+            "صَلَاتِي - لا تنسَ صلاتك",
+            14f,
+            gold
+        )
+        footer.gravity = Gravity.CENTER
+        content.addView(footer)
+
+        scroll.addView(content)
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
             )
         )
+
+        setContentView(root)
     }
 
-    // صفحة القرآن
+    private fun makeText(
+        value: String,
+        size: Float,
+        color: Int,
+        bold: Boolean = false
+    ): TextView {
+        return TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            gravity = Gravity.CENTER_VERTICAL
 
-    private fun showQuran() {
-        clearContent()
+            if (bold) {
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            }
 
-        content.addView(
-            addText("آية اليوم", 28f, gold, true)
-        )
-
-        val card = addCard()
-
-        card.addView(
-            addText(
-                getDailyVerse(),
-                25f,
-                white
-            )
-        )
-
-        card.addView(
-            addText(
-                "تتغير الآية يومياً",
-                14f,
-                muted
-            )
-        )
+            setPadding(8, 9, 8, 9)
+        }
     }
 
-    private fun getDailyVerse(): String {
-        val verses = listOf(
-            "﴿ وَأَقِمِ الصَّلَاةَ لِذِكْرِي ﴾\nطه: 14",
-            "﴿ إِنَّ اللَّهَ مَعَ الصَّابِرِينَ ﴾\nالبقرة: 153",
-            "﴿ فَاذْكُرُونِي أَذْكُرْكُمْ ﴾\nالبقرة: 152",
-            "﴿ وَهُوَ مَعَكُمْ أَيْنَ مَا كُنْتُمْ ﴾\nالحديد: 4",
-            "﴿ وَاسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ ﴾\nالبقرة: 45",
-            "﴿ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ ﴾\nالرعد: 28"
-        )
+    private fun makeButton(value: String): Button {
+        return Button(this).apply {
+            text = value
+            setTextColor(navy)
+            textSize = 15f
+            setBackgroundColor(gold)
 
-        val day = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        return verses[day % verses.size]
+            val params = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            params.setMargins(0, 7, 0, 7)
+            layoutParams = params
+        }
     }
 
-    // صفحة الإنجازات
+    private fun addSectionTitle(
+        parent: LinearLayout,
+        value: String
+    ) {
+        val title = makeText(value, 20f, gold, true)
+        parent.addView(title)
+    }
 
-    private fun showStreak() {
-        clearContent()
+    private fun addSpace(
+        parent: LinearLayout,
+        height: Int
+    ) {
+        val space = TextView(this)
+        space.height = height
+        parent.addView(space)
+    }
 
-        content.addView(
-            addText("إنجازاتي", 28f, gold, true)
-        )
+    private fun addAppCheck(
+        parent: LinearLayout,
+        title: String,
+        pkg: String
+    ) {
+        val selected = prefs.getStringSet(
+            "blocked_apps",
+            emptySet()
+        )?.contains(pkg) == true
 
-        val count = prefs.getInt("streak_count", 0)
-        val lastDate = prefs.getString("last_checkin", "")
+        val check = CheckBox(this).apply {
+            text = title
+            setTextColor(white)
+            isChecked = selected
 
-        val card = addCard()
+            setOnCheckedChangeListener { _, checked ->
+                val apps = prefs.getStringSet(
+                    "blocked_apps",
+                    emptySet()
+                )?.toMutableSet() ?: mutableSetOf()
 
-        card.addView(
-            addText("🔥", 45f, gold)
-        )
+                if (checked) {
+                    apps.add(pkg)
+                } else {
+                    apps.remove(pkg)
+                }
 
-        card.addView(
-            addText(
-                "$count يوم متتالي",
-                25f,
-                white,
-                true
-            )
-        )
-
-        card.addView(
-            addText(
-                "سجّل إنجازك اليومي بنفسك",
-                15f,
-                muted
-            )
-        )
-
-        val today = SimpleDateFormat(
-            "yyyy-MM-dd",
-            Locale.US
-        ).format(Date())
-
-        if (lastDate == today) {
-            card.addView(
-                addText(
-                    "تم تسجيل إنجاز اليوم بالفعل ✓",
-                    17f,
-                    gold
-                )
-            )
-        } else {
-            addButton(card, "تسجيل إنجاز اليوم") {
-                recordDailyStreak()
-                showStreak()
+                prefs.edit()
+                    .putStringSet("blocked_apps", apps)
+                    .apply()
             }
         }
 
-        card.addView(
-            addText(
-                "الاستمرار أهم من الرقم، وكل يوم فرصة جديدة",
-                14f,
-                muted
-            )
-        )
+        parent.addView(check)
     }
 
-    private fun recordDailyStreak() {
+    private fun recordCheckin() {
         val today = SimpleDateFormat(
             "yyyy-MM-dd",
             Locale.US
@@ -441,7 +358,14 @@ class MainActivity : AppCompatActivity() {
 
         val last = prefs.getString("last_checkin", "")
 
-        if (last == today) return
+        if (last == today) {
+            Toast.makeText(
+                this,
+                "تم تسجيل إنجاز اليوم بالفعل",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
 
         val yesterday = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, -1)
@@ -464,58 +388,27 @@ class MainActivity : AppCompatActivity() {
             .putString("last_checkin", today)
             .putInt("streak_count", newCount)
             .apply()
+
+        streakView?.text = "سلسلة إنجازك الحالية: $newCount يوم"
+
+        Toast.makeText(
+            this,
+            "تم تسجيل إنجاز اليوم",
+            Toast.LENGTH_SHORT
+        ).show()
     }
-
-    // التطبيقات المحظورة
-
-    private fun addAppCheck(
-        parent: LinearLayout,
-        title: String,
-        pkg: String
-    ) {
-        val check = CheckBox(this).apply {
-            text = title
-            setTextColor(white)
-
-            isChecked = prefs.getStringSet(
-                "blocked_apps",
-                emptySet()
-            )?.contains(pkg) == true
-
-            setOnCheckedChangeListener { _, checked ->
-                val set = prefs.getStringSet(
-                    "blocked_apps",
-                    emptySet()
-                )?.toMutableSet() ?: mutableSetOf()
-
-                if (checked) {
-                    set.add(pkg)
-                } else {
-                    set.remove(pkg)
-                }
-
-                prefs.edit()
-                    .putStringSet("blocked_apps", set)
-                    .apply()
-            }
-        }
-
-        parent.addView(check)
-    }
-
-    // الصلاحيات والموقع
 
     private fun requestNeededPermissions() {
-        val list = mutableListOf(
+        val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
 
         if (Build.VERSION.SDK_INT >= 33) {
-            list.add(Manifest.permission.POST_NOTIFICATIONS)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        val missing = list.filter {
+        val missing = permissions.filter {
             ContextCompat.checkSelfPermission(
                 this,
                 it
@@ -532,16 +425,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadPrayerTimes() {
-        if (
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        val fineGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val coarseGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!fineGranted && !coarseGranted) {
             updateStatus("اسمح للتطبيق بالوصول إلى الموقع أولاً.")
             requestNeededPermissions()
             return
@@ -550,14 +444,16 @@ class MainActivity : AppCompatActivity() {
         updateStatus("جارٍ تحديد موقعك وجلب المواقيت...")
 
         try {
-            val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+            val manager = getSystemService(LOCATION_SERVICE) as LocationManager
 
             val location: Location? = listOf(
                 LocationManager.GPS_PROVIDER,
                 LocationManager.NETWORK_PROVIDER
             ).mapNotNull { provider ->
                 try {
-                    lm.getLastKnownLocation(provider)
+                    manager.getLastKnownLocation(provider)
+                } catch (_: SecurityException) {
+                    null
                 } catch (_: Exception) {
                     null
                 }
@@ -565,14 +461,14 @@ class MainActivity : AppCompatActivity() {
 
             if (location == null) {
                 updateStatus(
-                    "تعذر الحصول على موقع. فعّل الموقع وحاول مرة أخرى."
+                    "تعذر الحصول على الموقع. فعّل الموقع وحاول مرة أخرى."
                 )
                 return
             }
 
             fetchTimes(location.latitude, location.longitude)
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             updateStatus("تعذر تحديد الموقع.")
         }
     }
@@ -585,6 +481,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun fetchTimes(lat: Double, lon: Double) {
         executor.execute {
+            var connection: HttpURLConnection? = null
+
             try {
                 val today = SimpleDateFormat(
                     "dd-MM-yyyy",
@@ -595,35 +493,24 @@ class MainActivity : AppCompatActivity() {
                     "https://api.aladhan.com/v1/timings/$today?latitude=$lat&longitude=$lon&method=3"
                 )
 
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 15000
-                    readTimeout = 15000
-                    requestMethod = "GET"
-                }
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 15000
+                connection.readTimeout = 15000
+                connection.requestMethod = "GET"
 
-                val body = conn.inputStream.bufferedReader().use {
+                val body = connection.inputStream.bufferedReader().use {
                     it.readText()
                 }
-
-                conn.disconnect()
 
                 val root = JSONObject(body).getJSONObject("data")
                 val timings = root.getJSONObject("timings")
 
-                val names = listOf(
-                    "Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"
-                )
-
-                val arabic = listOf(
-                    "الفجر", "الظهر", "العصر", "المغرب", "العشاء"
-                )
-
-                val values = names.map {
+                val values = prayerNames.map {
                     timings.getString(it).substringBefore(" ")
                 }
 
-                val display = arabic.zip(values).joinToString("\n") {
-                    "${it.first}   ${it.second}"
+                val display = arabicNames.zip(values).joinToString("\n") {
+                    "${it.first}       ${it.second}"
                 }
 
                 prefs.edit()
@@ -633,33 +520,31 @@ class MainActivity : AppCompatActivity() {
                     .putFloat("lon", lon.toFloat())
                     .apply()
 
-                scheduleAlarms(names, values)
+                scheduleAlarms(values)
+                updateNextPrayer(values)
 
                 runOnUiThread {
                     timesView?.text = display
                     statusView?.text = "تم تحديث مواقيت اليوم بنجاح."
-
-                    if (timesView == null) {
-                        showHome()
-                    }
                 }
 
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 updateStatus(
                     "تعذر جلب المواقيت. تحقق من الإنترنت وحاول مجدداً."
                 )
+            } finally {
+                connection?.disconnect()
             }
         }
     }
 
-    private fun scheduleAlarms(
-        names: List<String>,
-        values: List<String>
-    ) {
+    private fun scheduleAlarms(values: List<String>) {
         val now = Calendar.getInstance()
 
-        names.forEachIndexed { index, name ->
+        prayerNames.forEachIndexed { index, name ->
             val parts = values[index].split(":")
+
+            if (parts.size < 2) return@forEachIndexed
 
             val prayer = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, parts[0].toInt())
@@ -672,13 +557,17 @@ class MainActivity : AppCompatActivity() {
                 return@forEachIndexed
             }
 
-            PrayerAlarmReceiver.schedule(
-                this,
-                prayer.timeInMillis - 5 * 60 * 1000L,
-                index * 2,
-                "reminder",
-                name
-            )
+            val reminderTime = prayer.timeInMillis - 5 * 60 * 1000L
+
+            if (reminderTime > now.timeInMillis) {
+                PrayerAlarmReceiver.schedule(
+                    this,
+                    reminderTime,
+                    index * 2,
+                    "reminder",
+                    name
+                )
+            }
 
             PrayerAlarmReceiver.schedule(
                 this,
@@ -687,6 +576,64 @@ class MainActivity : AppCompatActivity() {
                 "start",
                 name
             )
+        }
+    }
+
+    private fun updateNextPrayer(values: List<String>) {
+        val now = Calendar.getInstance()
+
+        var nextName = ""
+        var nextTime: Calendar? = null
+
+        values.forEachIndexed { index, value ->
+            val parts = value.split(":")
+            if (parts.size < 2) return@forEachIndexed
+
+            val prayer = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, parts[0].toInt())
+                set(Calendar.MINUTE, parts[1].toInt())
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            if (
+                prayer.timeInMillis > now.timeInMillis &&
+                (nextTime == null ||
+                    prayer.timeInMillis < nextTime!!.timeInMillis)
+            ) {
+                nextTime = prayer
+                nextName = arabicNames[index]
+            }
+        }
+
+        if (nextTime == null) {
+            nextPrayerView?.text = "انتهت صلوات اليوم"
+            return
+        }
+
+        val remaining = nextTime!!.timeInMillis - now.timeInMillis
+        val hours = remaining / 3600000
+        val minutes = (remaining % 3600000) / 60000
+
+        nextPrayerView?.text =
+            "$nextName\nمتبقي $hours ساعة و$minutes دقيقة"
+    }
+
+    private fun startAdhanService() {
+        val intent = Intent(this, AdhanService::class.java)
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ContextCompat.startForegroundService(this, intent)
+            } else {
+                startService(intent)
+            }
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "تعذر تشغيل الأذان",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
