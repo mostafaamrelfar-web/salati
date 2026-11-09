@@ -2,15 +2,15 @@
 package com.salati.app
 
 import android.app.AlarmManager
-import android.app.BroadcastReceiver
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationCompat
 
 class PrayerAlarmReceiver : BroadcastReceiver() {
 
@@ -23,10 +23,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         if (type == "start") {
             context.getSharedPreferences("salati", Context.MODE_PRIVATE)
                 .edit()
-                .putLong(
-                    "mode_until",
-                    System.currentTimeMillis() + 15 * 60 * 1000L
-                )
+                .putLong("mode_until", System.currentTimeMillis() + 15 * 60 * 1000L)
                 .apply()
 
             notify(
@@ -36,23 +33,14 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 ADHAN_CHANNEL
             )
 
-            val prefs = context.getSharedPreferences(
-                "salati",
-                Context.MODE_PRIVATE
-            )
+            val prefs = context.getSharedPreferences("salati", Context.MODE_PRIVATE)
 
             if (prefs.getBoolean("adhan_enabled", true)) {
-                val serviceIntent = Intent(
-                    context,
-                    AdhanService::class.java
-                )
+                val serviceIntent = Intent(context, AdhanService::class.java)
 
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        ContextCompat.startForegroundService(
-                            context,
-                            serviceIntent
-                        )
+                        ContextCompat.startForegroundService(context, serviceIntent)
                     } else {
                         context.startService(serviceIntent)
                     }
@@ -62,7 +50,6 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             }
 
         } else if (type == "reminder") {
-
             val verse = verses[
                 (System.currentTimeMillis() / 86400000L % verses.size).toInt()
             ]
@@ -86,9 +73,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(text)
-            )
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
@@ -106,25 +91,25 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 Context.NOTIFICATION_SERVICE
             ) as NotificationManager
 
-            val reminderChannel = NotificationChannel(
-                REMINDER_CHANNEL,
-                "التذكير قبل الصلاة",
-                NotificationManager.IMPORTANCE_HIGH
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    REMINDER_CHANNEL,
+                    "التذكير قبل الصلاة",
+                    NotificationManager.IMPORTANCE_HIGH
+                )
             )
 
-            val adhanChannel = NotificationChannel(
-                ADHAN_CHANNEL,
-                "التنبيه عند دخول وقت الصلاة",
-                NotificationManager.IMPORTANCE_HIGH
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    ADHAN_CHANNEL,
+                    "التنبيه عند دخول وقت الصلاة",
+                    NotificationManager.IMPORTANCE_HIGH
+                )
             )
-
-            manager.createNotificationChannel(reminderChannel)
-            manager.createNotificationChannel(adhanChannel)
         }
     }
 
     companion object {
-
         const val REMINDER_CHANNEL = "salati_reminders_v1"
         const val ADHAN_CHANNEL = "salati_adhan_audio_v1"
 
@@ -144,10 +129,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         ) {
             if (at <= System.currentTimeMillis()) return
 
-            val intent = Intent(
-                context,
-                PrayerAlarmReceiver::class.java
-            ).apply {
+            val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
                 putExtra("type", type)
                 putExtra("prayer", prayer)
             }
@@ -156,8 +138,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 context,
                 id,
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
             val alarm = context.getSystemService(
