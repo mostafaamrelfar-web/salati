@@ -2,17 +2,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- الإنترنت والموقع -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- الإشعارات والتنبيهات -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- خدمة تشغيل الأذان -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
@@ -40,18 +37,26 @@
 
         </activity>
 
-        <!-- مستقبل تنبيهات الصلاة -->
         <receiver
             android:name=".PrayerAlarmReceiver"
             android:exported="false" />
 
-        <!-- خدمة تشغيل الأذان -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+
+        </receiver>
+
         <service
             android:name=".AdhanService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- خدمة حظر التطبيقات -->
         <service
             android:name=".PrayerBlockAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
