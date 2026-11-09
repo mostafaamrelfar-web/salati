@@ -40,8 +40,18 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             )
 
             if (prefs.getBoolean("adhan_enabled", true)) {
-                AdhanPlayer.start(context)
-            }
+    val serviceIntent = Intent(context, AdhanService::class.java)
+
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent)
+        } else {
+            context.startService(serviceIntent)
+        }
+    } catch (_: Exception) {
+        // يظل إشعار الصلاة يعمل حتى لو تعذر تشغيل الصوت
+    }
+}
 
         } else {
             val verse = verses[
